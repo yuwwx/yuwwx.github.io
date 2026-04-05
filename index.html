@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@yuwwx // appsec</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap");
+
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --bg: #0a0a0a;
+        --fg: #c8c8c8;
+        --accent: #00ff9d;
+        --accent-dim: #00ff9d22;
+        --accent-mid: #00ff9d66;
+        --red: #ff3c3c;
+        --amber: #ffb300;
+        --dim: #7a7a7a;
+        --surface: #111;
+        --font-mono: "JetBrains Mono", "Courier New", monospace;
+        --font-display: "Space Mono", monospace;
+      }
+
+      html {
+        font-size: 14px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--accent-dim) transparent;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--font-mono);
+        min-height: 100vh;
+        overflow-x: hidden;
+        position: relative;
+      }
+
+      /* CRT Scanlines */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 0, 0, 0.08) 2px,
+          rgba(0, 0, 0, 0.08) 4px
+        );
+        pointer-events: none;
+        z-index: 1000;
+      }
+
+      /* CRT flicker */
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(
+          ellipse at center,
+          transparent 50%,
+          rgba(0, 0, 0, 0.4) 100%
+        );
+        pointer-events: none;
+        z-index: 999;
+      }
+
+      /* Boot screen */
+      #boot-screen {
+        position: fixed;
+        inset: 0;
+        background: var(--bg);
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        transition:
+          opacity 0.8s ease,
+          visibility 0.8s ease;
+      }
+
+      #boot-screen.hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      #boot-text {
+        font-family: var(--font-mono);
+        font-size: 0.85rem;
+        color: var(--accent);
+        max-width: 560px;
+        width: 90%;
+        line-height: 1.7;
+      }
+
+      #boot-text .line {
+        opacity: 0;
+        transform: translateY(4px);
+        animation: bootLine 0.3s ease forwards;
+      }
+
+      #boot-text .ok {
+        color: var(--accent);
+      }
+      #boot-text .warn {
+        color: var(--amber);
+      }
+      #boot-text .err {
+        color: var(--red);
+      }
+      #boot-text .dim {
+        color: var(--dim);
+      }
+
+      @keyframes bootLine {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Main content */
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 3rem 2rem 6rem;
+        opacity: 0;
+        transition: opacity 0.6s ease 0.3s;
+      }
+
+      main.visible {
+        opacity: 1;
+      }
+
+      /* Header / Identity */
+      .identity {
+        margin-bottom: 3rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid var(--accent-dim);
+        position: relative;
+      }
+
+      .identity::before {
+        content: "// identity";
+        display: block;
+        font-size: 0.7rem;
+        color: var(--dim);
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .nick {
+        font-family: var(--font-display);
+        font-size: 3rem;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: -0.02em;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+        position: relative;
+        display: inline-block;
+      }
+
+      .nick .cursor {
+        display: inline-block;
+        width: 3px;
+        height: 0.8em;
+        background: var(--accent);
+        margin-left: 4px;
+        vertical-align: baseline;
+        animation: blink 1s step-end infinite;
+      }
+
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      .tagline {
+        font-size: 1rem;
+        color: var(--dim);
+        font-weight: 300;
+        margin-top: 0.4rem;
+      }
+
+      .tagline span {
+        color: var(--fg);
+      }
+
+      /* Status bar */
+      .status-bar {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 1.2rem;
+        font-size: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: var(--dim);
+      }
+
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 6px var(--accent-mid);
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      .status-dot.amber {
+        background: var(--amber);
+        box-shadow: 0 0 6px rgba(255, 179, 0, 0.4);
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      /* Sections */
+      .section {
+        margin-bottom: 2.5rem;
+        opacity: 0;
+        transform: translateY(12px);
+        transition: all 0.5s ease;
+      }
+
+      .section.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .section-header {
+        font-size: 0.7rem;
+        color: var(--dim);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+      }
+
+      .section-header::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--accent-dim);
+      }
+
+      /* Experience */
+      .exp-item {
+        padding: 1rem 0;
+        border-left: 2px solid var(--accent-dim);
+        padding-left: 1.2rem;
+        margin-bottom: 1rem;
+        position: relative;
+        transition: border-color 0.3s ease;
+      }
+
+      .exp-item:hover {
+        border-left-color: var(--accent);
+      }
+
+      .exp-item::before {
+        content: "";
+        position: absolute;
+        left: -5px;
+        top: 1.2rem;
+        width: 8px;
+        height: 8px;
+        background: var(--bg);
+        border: 2px solid var(--accent);
+        border-radius: 50%;
+        transition: background 0.3s ease;
+      }
+
+      .exp-item:hover::before {
+        background: var(--accent);
+      }
+
+      .exp-role {
+        font-weight: 700;
+        color: var(--fg);
+        font-size: 0.95rem;
+      }
+
+      .exp-company {
+        color: var(--accent);
+        font-size: 0.85rem;
+        margin-top: 0.2rem;
+      }
+
+      .exp-period {
+        font-size: 0.75rem;
+        color: var(--dim);
+        margin-top: 0.15rem;
+      }
+
+      .exp-desc {
+        font-size: 0.8rem;
+        color: var(--dim);
+        margin-top: 0.5rem;
+        line-height: 1.6;
+      }
+
+      /* Skills / Arsenal */
+      .arsenal {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .skill-tag {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.7rem;
+        border: 1px solid var(--accent-dim);
+        color: var(--fg);
+        background: transparent;
+        transition: all 0.25s ease;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .skill-tag::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: var(--accent);
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        z-index: 0;
+      }
+
+      .skill-tag:hover::before {
+        opacity: 0.1;
+      }
+
+      .skill-tag:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .skill-tag span {
+        position: relative;
+        z-index: 1;
+      }
+
+      /* Certs */
+      .cert-item {
+        display: grid;
+        grid-template-columns: 1fr 100px 50px;
+        align-items: baseline;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #1a1a1a;
+        font-size: 0.85rem;
+      }
+
+      .cert-name {
+        color: var(--fg);
+      }
+
+      .cert-org {
+        color: var(--accent-mid);
+        font-size: 0.75rem;
+        text-align: left;
+      }
+
+      .cert-year {
+        color: var(--dim);
+        font-size: 0.75rem;
+        text-align: right;
+      }
+
+      /* Contact / Links */
+      .links {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+      }
+
+      .link-item {
+        color: var(--dim);
+        text-decoration: none;
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: color 0.2s ease;
+        position: relative;
+      }
+
+      .link-item::before {
+        content: "$";
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .link-item:hover {
+        color: var(--accent);
+      }
+
+      /* Footer */
+      footer {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 2rem;
+        border-top: 1px solid #1a1a1a;
+        font-size: 0.7rem;
+        color: var(--dim);
+        display: flex;
+        justify-content: space-between;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+      }
+
+      footer.visible {
+        opacity: 1;
+      }
+
+      /* Glitch effect on hover for nick */
+      .nick:hover {
+        animation: glitch 0.3s ease;
+      }
+
+      @keyframes glitch {
+        0% {
+          text-shadow:
+            2px 0 var(--red),
+            -2px 0 cyan;
+        }
+        25% {
+          text-shadow:
+            -2px 0 var(--red),
+            2px 0 cyan;
+        }
+        50% {
+          text-shadow:
+            1px -1px var(--red),
+            -1px 1px cyan;
+        }
+        75% {
+          text-shadow:
+            -1px 1px var(--red),
+            1px -1px cyan;
+        }
+        100% {
+          text-shadow: none;
+        }
+      }
+
+      /* ASCII decoration */
+      .ascii-deco {
+        color: var(--accent-dim);
+        font-size: 0.6rem;
+        line-height: 1.2;
+        white-space: pre;
+        user-select: none;
+        position: absolute;
+        right: 0;
+        top: 0;
+      }
+
+      /* Mobile */
+      @media (max-width: 600px) {
+        html {
+          font-size: 13px;
+        }
+        .nick {
+          font-size: 2.2rem;
+        }
+        main {
+          padding: 2rem 1.2rem 4rem;
+        }
+        .status-bar {
+          gap: 1rem;
+        }
+        .links {
+          gap: 1rem;
+        }
+        .ascii-deco {
+          display: none;
+        }
+        footer {
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+      }
+
+      /* Selection */
+      ::selection {
+        background: var(--accent);
+        color: var(--bg);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Boot Screen -->
+    <div id="boot-screen">
+      <div id="boot-text"></div>
+    </div>
+
+    <!-- Main Content -->
+    <main id="main">
+      <section class="identity">
+        <div class="nick" id="nick-text"></div>
+        <div class="tagline">
+          application security engineer <span>//</span> breaking things to make
+          them safer
+        </div>
+        <div class="status-bar">
+          <div class="status-item">
+            <div class="status-dot"></div>
+            available for work
+          </div>
+          <div class="status-item">
+            <div class="status-dot amber"></div>
+            RU / BY / GE
+          </div>
+          <div class="status-item">
+            <div class="status-dot"></div>
+            remote / hybrid
+          </div>
+        </div>
+      </section>
+
+      <section class="section" data-delay="0">
+        <div class="section-header">// experience</div>
+        <div class="exp-item">
+          <div class="exp-role">AppSec Engineer</div>
+          <div class="exp-company">Sber Bank</div>
+          <div class="exp-period">jun 2024 -- present</div>
+          <div class="exp-desc">
+            Pre-release security review of features and code changes. Deployment
+            and administration of ASPM (DefectDojo), SCA (Dependency-Track), WAF
+            (PT AF). Integration of SAST, DAST, SCA, secrets scanning and
+            quality gates into CI/CD pipelines. Vulnerability triage, secure
+            architecture assessments, dev team consulting
+          </div>
+        </div>
+        <div class="exp-item">
+          <div class="exp-role">Security Consultant</div>
+          <div
+            class="exp-company"
+            style="color: var(--dim); font-style: italic"
+          >
+            NDA // fintech
+          </div>
+          <div class="exp-period">jun 2023 -- may 2024</div>
+          <div class="exp-desc">
+            End-to-end application security assessment of a high-load financial
+            platform. Threat modeling, secure architecture review, SSDLC
+            implementation, CI/CD hardening. Full scope under NDA
+          </div>
+        </div>
+        <div class="exp-item">
+          <div class="exp-role">Penetration Tester</div>
+          <div class="exp-company">Freelance</div>
+          <div class="exp-period">may 2022 -- may 2023</div>
+          <div class="exp-desc">
+            Manual and automated pentesting of web and mobile applications (Burp
+            Suite, OWASP ZAP, Acunetix, nuclei, MobSF). OSINT reconnaissance and
+            development of custom recon algorithms in Python. Vulnerability
+            classification by OWASP Top 10 / CWE, CVSS scoring, detailed
+            reporting with remediation guidance
+          </div>
+        </div>
+      </section>
+
+      <section class="section" data-delay="100">
+        <div class="section-header">// instruments</div>
+        <div class="arsenal">
+          <div class="skill-tag"><span>Burp Suite</span></div>
+          <div class="skill-tag"><span>OWASP</span></div>
+          <div class="skill-tag"><span>SAST</span></div>
+          <div class="skill-tag"><span>DAST</span></div>
+          <div class="skill-tag"><span>SCA</span></div>
+          <div class="skill-tag"><span>WAF</span></div>
+          <div class="skill-tag"><span>DevSecOps</span></div>
+          <div class="skill-tag"><span>CI/CD Security</span></div>
+          <div class="skill-tag"><span>MLSecOps</span></div>
+          <div class="skill-tag"><span>Python</span></div>
+          <div class="skill-tag"><span>JavaScript</span></div>
+          <div class="skill-tag"><span>Java</span></div>
+          <div class="skill-tag"><span>DefectDojo</span></div>
+          <div class="skill-tag"><span>Dependency-Track</span></div>
+          <div class="skill-tag"><span>nuclei</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-delay="150">
+        <div class="section-header">// bug bounty</div>
+        <div class="exp-desc" style="font-size: 0.85rem; line-height: 1.7">
+          Active bug bounty hunter. Reported valid vulnerabilities across
+          fintech, e-commerce and SaaS platforms. Focus on business logic flaws,
+          access control bypasses, and injection vectors
+        </div>
+      </section>
+
+      <section class="section" data-delay="200">
+        <div class="section-header">// certs & training</div>
+        <div class="cert-item">
+          <span class="cert-name">MLSecOps -- ML Systems Security</span>
+          <span class="cert-org">Softline</span>
+          <span class="cert-year">2026</span>
+        </div>
+        <div class="cert-item">
+          <span class="cert-name"
+            >WAPT -- Web Application Penetration Testing</span
+          >
+          <span class="cert-org">Codeby</span>
+          <span class="cert-year">2025</span>
+        </div>
+        <div class="cert-item">
+          <span class="cert-name"
+            >BNTU -- Information Systems & Technologies</span
+          >
+          <span class="cert-org">BSc</span>
+          <span class="cert-year">2024</span>
+        </div>
+      </section>
+
+      <section class="section" data-delay="300">
+        <div class="section-header">// connect</div>
+        <div class="links">
+          <a
+            href="https://t.me/yuwwx"
+            target="_blank"
+            rel="noopener"
+            class="link-item"
+            >telegram</a
+          >
+          <a
+            href="https://github.com/yuwwx"
+            target="_blank"
+            rel="noopener"
+            class="link-item"
+            >github</a
+          >
+          <a href="mailto:otricide@gmail.com" class="link-item">email</a>
+        </div>
+      </section>
+    </main>
+
+    <footer id="footer">
+      <span>@yuwwx // 2026</span>
+    </footer>
+
+    <script>
+      const bootLines = [
+        { text: "BIOS v3.14.159 ... ", delay: 0 },
+        { text: "initializing secure environment", cls: "dim", delay: 100 },
+        {
+          text: '[  <span class="ok">OK</span>  ] loading kernel modules',
+          delay: 200,
+        },
+        {
+          text: '[  <span class="ok">OK</span>  ] mounting encrypted volumes',
+          delay: 350,
+        },
+        {
+          text: '[  <span class="ok">OK</span>  ] starting network stack',
+          delay: 500,
+        },
+        {
+          text: '[  <span class="ok">OK</span>  ] Burp Suite proxy ............. armed',
+          delay: 650,
+        },
+        {
+          text: '[  <span class="ok">OK</span>  ] OWASP rulesets ............... loaded',
+          delay: 800,
+        },
+        {
+          text: '[  <span class="ok">OK</span>  ] vulnerability scanner ........ ready',
+          delay: 950,
+        },
+        {
+          text: '[ <span class="warn">WARN</span> ] attack surface ............... expanding',
+          delay: 1100,
+        },
+        {
+          text: '[  <span class="ok">OK</span>  ] identity: <span class="ok">@yuwwx</span>',
+          delay: 1300,
+        },
+        { text: "", delay: 1450 },
+        {
+          text: '<span class="ok">yuwwx@sec</span>:<span class="dim">~</span># ./portfolio --start',
+          delay: 1550,
+        },
+      ];
+
+      const bootText = document.getElementById("boot-text");
+      const bootScreen = document.getElementById("boot-screen");
+      const main = document.getElementById("main");
+
+      bootLines.forEach((line, i) => {
+        setTimeout(() => {
+          const div = document.createElement("div");
+          div.className = "line";
+          div.style.animationDelay = "0s";
+          div.innerHTML = line.text;
+          if (line.cls) div.classList.add(line.cls);
+          bootText.appendChild(div);
+        }, line.delay);
+      });
+
+      // Transition to main
+      setTimeout(() => {
+        bootScreen.classList.add("hidden");
+        main.classList.add("visible");
+        typeNick();
+        revealSections();
+      }, 2400);
+
+      // Type nickname
+      function typeNick() {
+        const target = document.getElementById("nick-text");
+        const text = "@yuwwx";
+        let i = 0;
+        const cursor = document.createElement("span");
+        cursor.className = "cursor";
+        target.appendChild(cursor);
+
+        function type() {
+          if (i < text.length) {
+            const char = document.createTextNode(text[i]);
+            target.insertBefore(char, cursor);
+            i++;
+            setTimeout(type, 80 + Math.random() * 60);
+          }
+        }
+        setTimeout(type, 400);
+      }
+
+      // Reveal sections on scroll / load
+      function revealSections() {
+        const sections = document.querySelectorAll(".section");
+        const footer = document.getElementById("footer");
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                const delay = entry.target.dataset.delay || 0;
+                setTimeout(() => entry.target.classList.add("visible"), delay);
+                observer.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0.15 },
+        );
+
+        sections.forEach((s) => observer.observe(s));
+        observer.observe(footer);
+
+        // Trigger initial check
+        setTimeout(() => {
+          sections.forEach((s) => {
+            const rect = s.getBoundingClientRect();
+            if (rect.top < window.innerHeight) {
+              const delay = s.dataset.delay || 0;
+              setTimeout(
+                () => s.classList.add("visible"),
+                parseInt(delay) + 300,
+              );
+            }
+          });
+          const fRect = footer.getBoundingClientRect();
+          if (fRect.top < window.innerHeight) {
+            setTimeout(() => footer.classList.add("visible"), 600);
+          }
+        }, 100);
+      }
+    </script>
+  </body>
+</html>
